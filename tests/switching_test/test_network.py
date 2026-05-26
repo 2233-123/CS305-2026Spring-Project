@@ -55,6 +55,7 @@ def run_mininet():
     net.start()
     time.sleep(1)
     do_arp_all(net)
+    CLI.do_arping_all = lambda self, line: do_arp_all(net)
     CLI(net)
 
     net.stop()

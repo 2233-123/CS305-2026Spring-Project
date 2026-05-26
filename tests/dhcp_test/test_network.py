@@ -15,11 +15,18 @@ def ping(host, dst, count=1, timeout=1):
     return host.cmd('ping -c %s -W %s %s' % (count, timeout, dst))
 
 def send_arp(node, count=1):
-    node.cmd('arping -c %s -A -I %s-eth0 %s' % (count, node.name, node.IP()))
+    node.cmd('arping -c %d -A -I %s-eth0 %s' % (count, node.name, node.IP()))
 
 def send_dhcp(node):
     print('Sending DHCP request dhclient -v %s-eth0 '% (node.name))
     node.cmd('dhclient -v %s-eth0' % (node.name))
+    # Wait for dhclient to complete, then update Mininet's IP tracking
+    import time
+    time.sleep(2)
+    out = node.cmd('ip addr show %s-eth0 | grep "inet " | awk \'{print $2}\' | cut -d/ -f1' % node.name).strip()
+    if out:
+        ip, mask = (out.split('/') + ['24'])[:2]
+        node.setIP(ip, prefixLen=int(mask))
 
 
 def do_arp_all(net):
@@ -49,6 +56,8 @@ def run_mininet():
     net.start()
     for h in net.hosts:
         send_dhcp(h)
+    do_arp_all(net)
+    CLI.do_arping_all = lambda self, line: do_arp_all(net)
     CLI(net)
 
     net.stop()

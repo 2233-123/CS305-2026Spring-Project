@@ -36,7 +36,6 @@ class Firewall:
         self.rules = self._load_rules(rule_file)
         self.installed = set()
 
-    # Some helper functions that may be useful
     def _normalize_any(self, value):
         if value is None:
             return None
@@ -61,35 +60,94 @@ class Firewall:
         return int(value)
 
     def _load_rules(self, rule_file):
-        """
-        Load firewall rules from firewall_rules.json and return a list of FirewallRule.
-        """
         rules = []
-
-        # TODO: read rule_file
-        # TODO: parse JSON rules
-        # TODO: create FirewallRule objects
-        # TODO: append them into rules
-
+        if not os.path.exists(rule_file):
+            return rules
+        with open(rule_file, 'r') as f:
+            data = json.load(f)
+        for item in data.get('rules', []):
+            rule = FirewallRule(
+                src_ip=self._normalize_any(item.get('src_ip')),
+                dst_ip=self._normalize_any(item.get('dst_ip')),
+                proto=self._normalize_proto(item.get('proto')),
+                src_port=self._normalize_any(item.get('src_port')),
+                dst_port=self._normalize_any(item.get('dst_port')),
+                action=item.get('action', 'deny'),
+            )
+            rules.append(rule)
         return rules
 
     def install_rules(self, ofctls):
-        """
-        Install firewall rules to all switches.
-        """
         for dpid, ofctl in ofctls.items():
             for rule in self.rules:
+                if rule.action != 'deny':
+                    continue
 
-                # TODO: only handle deny rules
+                proto_num = self._proto_to_number(rule.proto)
+                src_port = self._normalize_port(rule.src_port)
+                dst_port = self._normalize_port(rule.dst_port)
 
-                # TODO: convert protocol name to protocol number
+                # Build a unique key for dedup
+                rule_key = (rule.src_ip or '*', rule.dst_ip or '*',
+                           proto_num, src_port, dst_port, dpid)
+                if rule_key in self.installed:
+                    continue
+                self.installed.add(rule_key)
 
-                # TODO: normalize source and destination ports
+                # Set dl_type based on protocol
+                if proto_num == 0:
+                    dl_type = 0
+                elif proto_num == inet.IPPROTO_ICMP:
+                    dl_type = ether.ETH_TYPE_IP
+                else:
+                    dl_type = ether.ETH_TYPE_IP
 
-                # TODO: skip invalid port rules
-
-                # TODO: avoid duplicated flow installation
-
-                # TODO: use ofctl.set_flow() to install a high-priority drop flow
-
-                pass
+                # For ICMP, no port matching
+                if proto_num == inet.IPPROTO_ICMP:
+                    ofctl.set_flow(
+                        cookie=self.COOKIE, priority=self.PRIORITY,
+                        dl_type=dl_type,
+                        nw_src=rule.src_ip or 0,
+                        src_mask=32 if rule.src_ip else 0,
+                        nw_dst=rule.dst_ip or 0,
+                        dst_mask=32 if rule.dst_ip else 0,
+                        nw_proto=proto_num,
+                        actions=[],
+                    )
+                elif proto_num == 0:
+                    # No specific protocol - just IP-based
+                    ofctl.set_flow(
+                        cookie=self.COOKIE, priority=self.PRIORITY,
+                        dl_type=ether.ETH_TYPE_IP,
+                        nw_src=rule.src_ip or 0,
+                        src_mask=32 if rule.src_ip else 0,
+                        nw_dst=rule.dst_ip or 0,
+                        dst_mask=32 if rule.dst_ip else 0,
+                        actions=[],
+                    )
+                else:
+                    # TCP/UDP with or without ports
+                    if src_port == 0 and dst_port == 0:
+                        ofctl.set_flow(
+                            cookie=self.COOKIE, priority=self.PRIORITY,
+                            dl_type=dl_type,
+                            nw_src=rule.src_ip or 0,
+                            src_mask=32 if rule.src_ip else 0,
+                            nw_dst=rule.dst_ip or 0,
+                            dst_mask=32 if rule.dst_ip else 0,
+                            nw_proto=proto_num,
+                            actions=[],
+                        )
+                    else:
+                        ofctl.set_flow(
+                            cookie=self.COOKIE, priority=self.PRIORITY,
+                            dl_type=dl_type,
+                            nw_src=rule.src_ip or 0,
+                            src_mask=32 if rule.src_ip else 0,
+                            nw_dst=rule.dst_ip or 0,
+                            dst_mask=32 if rule.dst_ip else 0,
+                            nw_proto=proto_num,
+                            tp_src=src_port,
+                            tp_dst=dst_port,
+                            actions=[],
+                        )
