@@ -312,7 +312,7 @@ class ControllerApp(app_manager.OSKenApp):
             pkt_dhcp = pkt.get_protocols(dhcp.dhcp)
             inPort = msg.in_port
             if pkt_dhcp:
-                DHCPServer.handle_dhcp(datapath, inPort, pkt)
+                hub.spawn(DHCPServer.handle_dhcp, datapath, inPort, pkt)
                 return
 
             if len(msg.data) >= 14:

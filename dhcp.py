@@ -144,8 +144,8 @@ class DHCPServer:
                          ip_str, now - cls._conflict_ips[ip_str])
             return False
 
-        cls._send_arp_probe(datapath, ip_str)
         cls._probing[ip_str] = True
+        cls._send_arp_probe(datapath, ip_str)
         hub.sleep(DHCPConfig.probe_timeout)
 
         result = cls._probing.pop(ip_str, False)   # True=clear, False=conflict
