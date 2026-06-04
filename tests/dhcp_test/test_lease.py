@@ -127,9 +127,9 @@ def run_tests():
     time.sleep(1)
 
     # ---------------------------------------------------------------
-    # Test 4: Lease expiry (wait 65s, then check reclaim)
+    # Test 3: Lease expiry (wait 65s, then check reclaim)
     # ---------------------------------------------------------------
-    print("\n=== Test 4: Lease expiry auto-reclaim ===")
+    print("\n=== Test 3: Lease expiry auto-reclaim ===")
     LEASE_SEC = 60  # must match dhcp.py's DHCPConfig.lease_time
     print(f"  Lease time is {LEASE_SEC}s. Waiting {LEASE_SEC + 5}s for expiry...")
 
@@ -147,9 +147,9 @@ def run_tests():
     check(ip3.startswith('192.168.1.'), f"h3 IP in subnet: {ip3}")
 
     # ---------------------------------------------------------------
-    # Test 5: Renewal — refresh expiry
+    # Test 4: Renewal — refresh expiry
     # ---------------------------------------------------------------
-    print("\n=== Test 5: Lease renewal ===")
+    print("\n=== Test 4: Lease renewal ===")
     print("  * Manual: re-run dhclient on an already-leased host")
     print("  * Controller log should show: '[DHCP] RENEW IP x.x.x.x -> MAC ...'")
 
