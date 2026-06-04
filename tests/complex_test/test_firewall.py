@@ -243,8 +243,12 @@ if __name__ == "__main__":
 
     restore_rules(original)
     print("Firewall rules removed. firewall_rules.json restored to original.")
-
     input(">>> Press ENTER to run Phase 2 (firewall removed). Ctrl+C to skip.")
+    
+    # Force empty rules for Phase 2
+    with open("firewall_rules.json", "w") as f:
+        json.dump({"rules": []}, f, indent=2)
+    print("Firewall rules cleared for Phase 2.")
 
     print()
     print("=" * 70)
