@@ -148,18 +148,26 @@ def run_tests():
 
     # --- TCP connectivity through NAT ---
     print("\n=== NAT: TCP connectivity ===")
+    # Diagnose routing on h1
+    routes = h1.cmd('ip route show 2>&1').strip()
+    print("  [DIAG] h1 routes: " + routes.replace('\n', ' | '))
+    arp_cache = h1.cmd('ip neigh show 2>&1').strip()
+    print("  [DIAG] h1 ARP: " + arp_cache.replace('\n', ' | '))
     # Start listener on h2
-    h2.cmd('nc -l 0.0.0.0 8088 > /tmp/h2_recv.txt 2>&1 &')
+    h2.cmd('rm -f /tmp/h2_recv.txt')
+    h2.cmd('nc -l 10.0.2.100 8088 > /tmp/h2_recv.txt 2>&1 &')
     time.sleep(0.5)
-    # Send from h1
-    h1.cmd('echo "HELLO_FROM_H1" | nc -w 2 %s 8088 2>/dev/null || true' % ext_ip)
-    time.sleep(1)
+    # Send from h1 (increased timeout, capture stderr)
+    result = h1.cmd('echo "HELLO_FROM_H1" | timeout 5 nc -w 5 %s 8088 2>&1; echo "NC_EXIT=$?"' % ext_ip)
+    print("  [DIAG] h1 nc output: " + result.strip().replace('\n', ' | '))
+    time.sleep(2)
     # Check what h2 received
     received_data = h2.cmd('cat /tmp/h2_recv.txt 2>/dev/null').strip()
+    print("  [DIAG] h2 received: '%s'" % received_data)
     check('HELLO_FROM_H1' in received_data,
           "TCP: h2 received data from h1 via NAT")
     # Kill listener
-    h2.cmd('pkill -f "nc -l 0.0.0.0 8088" 2>/dev/null || true')
+    h2.cmd('pkill -f "nc -l" 2>/dev/null || true')
 
     # --- Test that internal traffic is NOT NAT'd ---
     print("\n=== Internal-to-internal: no NAT ===")
