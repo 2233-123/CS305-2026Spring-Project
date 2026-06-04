@@ -13,6 +13,7 @@ from os_ken.lib.packet import udp
 from dhcp import DHCPServer, DHCPConfig
 from dns_server import DNSServer, DNSConfig
 from nat import NATTable, NATConfig, NAT_COOKIE, NAT_PRIORITY, _ip_in_network
+from os_ken.lib import addrconv
 from collections import defaultdict
 import time
 from ofctl_utilis import OfCtl,OfCtl_v1_0,OfCtl_after_v1_2,VLANID_NONE
