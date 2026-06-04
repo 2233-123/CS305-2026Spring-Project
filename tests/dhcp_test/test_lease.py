@@ -7,8 +7,6 @@ Run this on the VM with the controller already started:
 
 The script runs through 5 test scenarios non-interactively and exits.
 """
-from mininet.cli import CLI
-from mininet.link import TCLink
 from mininet.log import setLogLevel
 from mininet.net import Mininet
 from mininet.node import RemoteController
@@ -127,23 +125,6 @@ def run_tests():
 
     do_arp_all(net)
     time.sleep(1)
-
-    # ---------------------------------------------------------------
-    # Test 3: IP pool exhaustion — manual CLI interaction
-    # ---------------------------------------------------------------
-    print("\n=== Test 3: IP pool exhaustion ===")
-    print("  NOTE: change end_ip to '192.168.1.3' in dhcp.py and restart controller first")
-    print()
-    print("  Manual operations in Mininet CLI:")
-    print("  > h1 dhclient -r h1-eth0           # Release h1's IP")
-    print("  > h3 dhclient -v h3-eth0           # h3 should get h1's released IP")
-    print("  > h1 dhclient -v h1-eth0           # h1 re-requests (pool should be full)")
-    print("  > h1 ifconfig; h3 ifconfig         # Verify IPs")
-    print("  Controller log: '[DHCP] No free IP for MAC ...' when pool exhausted")
-    print("  Enter 'exit' or Ctrl+D to continue auto tests...")
-    print()
-    CLI(net)
-    do_arp_all(net)
 
     # ---------------------------------------------------------------
     # Test 4: Lease expiry (wait 65s, then check reclaim)
