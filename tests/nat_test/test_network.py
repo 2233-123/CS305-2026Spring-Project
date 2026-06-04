@@ -156,6 +156,12 @@ def run_tests():
 
     # --- TCP connectivity through NAT ---
     print("\n=== NAT: TCP connectivity ===")
+    # Disable kernel filtering on internal hosts
+    for node in [h1, h3]:
+        node.cmd('iptables -I INPUT -i %s-eth0 -j ACCEPT 2>/dev/null || true' % node.name)
+    # Capture with verbose to see checksums
+    h1.cmd('timeout 10 tcpdump -i h1-eth0 -c 8 -n -v tcp > /tmp/h1_dump.txt 2>&1 &')
+    time.sleep(0.3)
     h2.cmd('rm -f /tmp/h2_recv.txt')
     h2.cmd("""cat > /tmp/tcp_server.py << 'PYEOF'
 import socket
@@ -182,6 +188,8 @@ s.close()
 PYEOF""" % ext_ip)
     h1.cmd("echo 'HELLO_FROM_H1' | python3 /tmp/tcp_client.py 2>&1")
     time.sleep(2)
+    print("  [DIAG] tcpdump:")
+    print("  " + h1.cmd('cat /tmp/h1_dump.txt').strip()[:500])
     received_data = h2.cmd('cat /tmp/h2_recv.txt 2>/dev/null').strip()
     check('HELLO_FROM_H1' in received_data,
           "TCP: h2 received data from h1 via NAT")
