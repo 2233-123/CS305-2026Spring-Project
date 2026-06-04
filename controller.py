@@ -697,9 +697,17 @@ class ControllerApp(app_manager.OSKenApp):
         try:
             msg = ev.msg
             datapath = msg.datapath
-            pkt = packet.Packet(data=msg.data)
+            raw = msg.data
+            pkt = packet.Packet(data=raw)
             pkt_dhcp = pkt.get_protocols(dhcp.dhcp)
             inPort = msg.in_port
+            # Debug: log every non-LLDP packet-in
+            if len(raw) >= 14:
+                eth = struct.unpack('!6s6sH', raw[0:14])
+                eth_type = eth[2]
+                if eth_type not in (0x88cc, 0x9999, 0x0806):
+                    self.logger.info("[PKT-IN] eth_type=0x%04x in_port=%s len=%d dpid=%s",
+                                     eth_type, inPort, len(raw), datapath.id)
             if pkt_dhcp:
                 hub.spawn(DHCPServer.handle_dhcp, datapath, inPort, pkt)
                 return
