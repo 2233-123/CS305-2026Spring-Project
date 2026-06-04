@@ -365,9 +365,6 @@ class NATTable:
         rewritten = cls._rewrite_outbound(raw_data, info, entry, dst_mac)
         cls._send_packet(datapath, in_port, rewritten, output_port)
 
-        if proto in (PROTO_TCP, PROTO_UDP):
-            cls._install_bidirectional_flows(datapath, entry, in_port, output_port)
-
     @classmethod
     def handle_inbound(cls, datapath, in_port, raw_data, output_port):
         """Process an inbound packet (external -> NAT IP)."""
