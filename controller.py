@@ -23,6 +23,7 @@ import copy
 import heapq
 import json
 import os
+import socket
 from firewall import Firewall
 import struct
 from os_ken.lib import hub
@@ -341,18 +342,28 @@ class ControllerApp(app_manager.OSKenApp):
         path.reverse()
         return path[:-1]
 
+    @staticmethod
+    def _dhcp_network():
+        """Return (network_address, prefix_len) from current DHCP config."""
+        start = struct.unpack('!I', socket.inet_aton(DHCPConfig.start_ip))[0]
+        mask = struct.unpack('!I', socket.inet_aton(DHCPConfig.netmask))[0]
+        prefix = bin(mask).count('1')
+        net = socket.inet_ntoa(struct.pack('!I', start & mask))
+        return net, prefix
+
     def _install_host_flows(self):
         self._print_topology()
+        dhcp_net, dhcp_prefix = self._dhcp_network()
         for host_mac, info in list(self.hosts.items()):
             host_dpid = info['dpid']
             host_port = info['port']
             host_ip = info.get('ip', '')
             # Skip direct flows for external hosts — NAT must intercept
             # packets to external destinations via the table-miss path.
+            # "External" means: not in the DHCP-configured internal network
+            # and not the NAT external IP itself.
             host_is_external = (host_ip and
-                not _ip_in_network(host_ip,
-                                   NATConfig.internal_network.split('/')[0],
-                                   NATConfig.internal_prefix) and
+                not _ip_in_network(host_ip, dhcp_net, dhcp_prefix) and
                 host_ip != NATConfig.external_ip)
             for sw_dpid in self.switches:
                 if host_mac not in self.hosts:
