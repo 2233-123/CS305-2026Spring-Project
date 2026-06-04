@@ -366,11 +366,13 @@ class NATTable:
         cls._send_packet(datapath, in_port, rewritten, output_port)
 
     @classmethod
-    def handle_inbound(cls, datapath, in_port, raw_data, output_port):
-        """Process an inbound packet (external -> NAT IP)."""
+    def handle_inbound(cls, datapath, in_port, raw_data):
+        """Process an inbound packet (external -> NAT IP).
+        Returns (rewritten_data, entry) or (None, None).
+        Caller is responsible for sending the rewritten packet."""
         info = _parse_eth_ip(raw_data)
         if info is None:
-            return
+            return None, None
 
         nat_ip = info['dst_ip']
         proto = info['proto']
@@ -379,21 +381,21 @@ class NATTable:
 
         if proto == PROTO_TCP or proto == PROTO_UDP:
             if len(raw_data) < l4_offset + 4:
-                return
+                return None, None
             nat_port = struct.unpack('!H', raw_data[l4_offset + 2:l4_offset + 4])[0]
         elif proto == PROTO_ICMP:
             if len(raw_data) < l4_offset + 6:
-                return
+                return None, None
             icmp_type = raw_data[l4_offset]
             if icmp_type in (0, 8):
                 nat_port = struct.unpack('!H', raw_data[l4_offset + 4:l4_offset + 6])[0]
 
         entry = cls._lookup_inbound(nat_ip, nat_port, proto)
         if entry is None:
-            return
+            return None, None
 
         rewritten = cls._rewrite_inbound(raw_data, info, entry)
-        cls._send_packet(datapath, in_port, rewritten, output_port)
+        return rewritten, entry
 
     # ------------------------------------------------------------------
     # flow installation

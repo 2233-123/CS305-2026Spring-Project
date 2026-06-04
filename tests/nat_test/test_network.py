@@ -179,14 +179,10 @@ s.connect(('%s', 8088))
 s.send(sys.stdin.read().encode())
 s.close()
 PYEOF""" % ext_ip)
-    result = h1.cmd("echo 'HELLO_FROM_H1' | python3 /tmp/tcp_client.py 2>&1; echo 'EXIT:' $?")
-    print("  [DIAG] client: " + result.strip().replace('\n', ' | '))
+    h1.cmd("echo 'HELLO_FROM_H1' | python3 /tmp/tcp_client.py 2>/dev/null || true")
     time.sleep(1)
 
     received_data = h2.cmd('cat /tmp/h2_recv.txt 2>/dev/null').strip()
-    server_log = h2.cmd('cat /tmp/h2_tcp.log 2>/dev/null').strip()
-    if server_log:
-        print("  [DIAG] server: " + server_log.replace('\n', ' | '))
     check('HELLO_FROM_H1' in received_data,
           "TCP: h2 received data from h1 via NAT")
     h2.cmd('pkill -f "tcp_server.py" 2>/dev/null || true')

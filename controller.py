@@ -720,11 +720,14 @@ class ControllerApp(app_manager.OSKenApp):
                 dst_ip = pkt_ipv4.dst
                 if dst_ip == NATConfig.external_ip:
                     # Inbound: external host sends to NAT IP
-                    target_mac = self.ip_to_mac.get(dst_ip)
-                    out_port = self._get_host_port(inPort, dst_ip)
-                    if out_port is None:
-                        out_port = datapath.ofproto.OFPP_ALL
-                    NATTable.handle_inbound(datapath, inPort, msg.data, out_port)
+                    result = NATTable.handle_inbound(datapath, inPort, msg.data)
+                    if result[0] is not None:
+                        rewritten, entry = result
+                        internal_ip = entry['src_ip']
+                        out_port = self._get_host_port(inPort, internal_ip)
+                        if out_port is None:
+                            out_port = datapath.ofproto.OFPP_ALL
+                        NATTable._send_packet(datapath, inPort, rewritten, out_port)
                     return
                 elif (dst_ip != DNSConfig.controller_ip and
                       not _ip_in_network(dst_ip, NATConfig.internal_network.split('/')[0],
