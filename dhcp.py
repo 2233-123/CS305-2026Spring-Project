@@ -20,6 +20,7 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _DHCP_NAK            = getattr(dhcp, 'DHCP_NAK', 6)
 _DHCP_DECLINE        = getattr(dhcp, 'DHCP_DECLINE', 4)
+_DHCP_RELEASE        = getattr(dhcp, 'DHCP_RELEASE', 7)
 _DHCP_REQ_IP_OPT     = getattr(dhcp, 'DHCP_REQUESTED_IP_ADDR_OPT', 50)   # RFC 2132
 _DHCP_MSG_OPT        = getattr(dhcp, 'DHCP_MESSAGE_OPT', 56)              # RFC 2132
 _DHCP_HOST_NAME_OPT  = getattr(dhcp, 'DHCP_HOST_NAME_OPT', 12)            # RFC 2132
@@ -486,7 +487,7 @@ class DHCPServer:
                 cls._send_packet(datapath, port, resp_pkt)
 
         # ---- DHCPRELEASE ----
-        elif msg_type == bytes([dhcp.DHCP_RELEASE]):
+        elif msg_type == bytes([_DHCP_RELEASE]):
             if mac_bytes:
                 cls._release_lease(mac_bytes)
 
