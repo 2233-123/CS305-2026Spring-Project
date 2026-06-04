@@ -717,6 +717,8 @@ class ControllerApp(app_manager.OSKenApp):
             # ---- NAT ----
             if pkt_ipv4:
                 dst_ip = pkt_ipv4.dst
+                self.logger.info("[DEBUG-NAT] pkt_in IPv4: dst=%s src=%s proto=%s in_port=%s dpid=%s",
+                                 dst_ip, pkt_ipv4.src, pkt_ipv4.proto, inPort, datapath.id)
                 if dst_ip == NATConfig.external_ip:
                     # Inbound: external host sends to NAT IP
                     target_mac = self.ip_to_mac.get(dst_ip)
