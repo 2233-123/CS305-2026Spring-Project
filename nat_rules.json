@@ -1,0 +1,7 @@
+{
+  "external_ip": "10.0.2.15",
+  "internal_network": "192.168.1.0/24",
+  "tcp_timeout": 300,
+  "udp_timeout": 30,
+  "icmp_timeout": 60
+}

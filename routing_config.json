@@ -1,0 +1,4 @@
+{
+  "algorithm": "dijkstra",
+  "comment": "options: dijkstra | bellman-ford"
+}

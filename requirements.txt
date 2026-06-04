@@ -1,3 +1,5 @@
 os-ken<4
 mininet==2.3.0.dev6
 eventlet==0.29.1
+networkx>=2.5
+matplotlib>=3.3

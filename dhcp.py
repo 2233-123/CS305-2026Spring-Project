@@ -6,6 +6,7 @@ from os_ken.lib.packet import udp
 from os_ken.lib.packet import dhcp
 from os_ken.lib.packet import arp
 from os_ken.lib import hub
+from dns_server import DNSServer
 import struct
 import socket
 import time
@@ -17,10 +18,11 @@ _logger = logging.getLogger(__name__)
 # Fallback constants (os-ken's dhcp module should define these; numeric
 # fallbacks ensure correctness on any version)
 # ---------------------------------------------------------------------------
-_DHCP_NAK         = getattr(dhcp, 'DHCP_NAK', 6)
-_DHCP_DECLINE     = getattr(dhcp, 'DHCP_DECLINE', 4)
-_DHCP_REQ_IP_OPT  = getattr(dhcp, 'DHCP_REQUESTED_IP_ADDR_OPT', 50)   # RFC 2132
-_DHCP_MSG_OPT     = getattr(dhcp, 'DHCP_MESSAGE_OPT', 56)              # RFC 2132
+_DHCP_NAK            = getattr(dhcp, 'DHCP_NAK', 6)
+_DHCP_DECLINE        = getattr(dhcp, 'DHCP_DECLINE', 4)
+_DHCP_REQ_IP_OPT     = getattr(dhcp, 'DHCP_REQUESTED_IP_ADDR_OPT', 50)   # RFC 2132
+_DHCP_MSG_OPT        = getattr(dhcp, 'DHCP_MESSAGE_OPT', 56)              # RFC 2132
+_DHCP_HOST_NAME_OPT  = getattr(dhcp, 'DHCP_HOST_NAME_OPT', 12)            # RFC 2132
 
 
 class DHCPConfig:
@@ -56,6 +58,9 @@ class DHCPServer:
 
     mac_to_lease = {}   # mac_bytes -> {"ip": str, "assigned_at": float, "expires_at": float, "state": str}
     ip_to_mac = {}      # ip_str -> mac_bytes
+    mac_to_hostname = {}  # mac_bytes -> hostname_str
+
+    _all_datapaths = {}  # dpid -> datapath (set by controller)
 
     # ARP probe state — shared between DHCP greenlet and ARP-reply handler
     _probing = {}            # ip_str -> bool  (True=waiting, False=conflict-detected)
@@ -85,6 +90,8 @@ class DHCPServer:
             cls.mac_to_lease[mac_addr]['expires_at'] = 0
             if ip in cls.ip_to_mac:
                 del cls.ip_to_mac[ip]
+            cls.mac_to_hostname.pop(mac_addr, None)
+            DNSServer.remove_record(ip=ip)
             _logger.info("[DHCP] RELEASED IP %s from MAC %s", ip, mac_addr.hex(':'))
 
     # ------------------------------------------------------------------
@@ -92,37 +99,42 @@ class DHCPServer:
     # ------------------------------------------------------------------
     @classmethod
     def _send_arp_probe(cls, datapath, target_ip):
-        """Broadcast an ARP Request to check whether *target_ip* is already in use."""
-        src_mac = cls.hardware_addr
-        src_ip = cls.server_ip
+        """Broadcast an ARP Request from ALL known switches to check target_ip."""
+        sends = set()
+        for dp in list(cls._all_datapaths.values()) + [datapath]:
+            if dp.id in sends:
+                continue
+            sends.add(dp.id)
+            src_mac = cls.hardware_addr
+            src_ip = cls.server_ip
 
-        e = ethernet.ethernet(dst='ff:ff:ff:ff:ff:ff', src=src_mac,
-                              ethertype=ethernet.ether.ETH_TYPE_ARP)
-        a = arp.arp(
-            hwtype=arp.ARP_HW_TYPE_ETHERNET,
-            proto=ethernet.ether.ETH_TYPE_IP,
-            hlen=6, plen=4,
-            opcode=arp.ARP_REQUEST,
-            src_mac=src_mac, src_ip=src_ip,
-            dst_mac='00:00:00:00:00:00', dst_ip=target_ip,
-        )
-        p = packet.Packet()
-        p.add_protocol(e)
-        p.add_protocol(a)
-        p.serialize()
+            e = ethernet.ethernet(dst='ff:ff:ff:ff:ff:ff', src=src_mac,
+                                  ethertype=ethernet.ether.ETH_TYPE_ARP)
+            a = arp.arp(
+                hwtype=arp.ARP_HW_TYPE_ETHERNET,
+                proto=ethernet.ether.ETH_TYPE_IP,
+                hlen=6, plen=4,
+                opcode=arp.ARP_REQUEST,
+                src_mac=src_mac, src_ip=src_ip,
+                dst_mac='00:00:00:00:00:00', dst_ip=target_ip,
+            )
+            p = packet.Packet()
+            p.add_protocol(e)
+            p.add_protocol(a)
+            p.serialize()
 
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-        actions = [parser.OFPActionOutput(port=ofproto.OFPP_ALL)]
-        out = parser.OFPPacketOut(
-            datapath=datapath,
-            buffer_id=ofproto.OFP_NO_BUFFER,
-            in_port=ofproto.OFPP_CONTROLLER,
-            actions=actions,
-            data=p.data,
-        )
-        datapath.send_msg(out)
-        _logger.info("[DHCP] ARP PROBE sent for IP %s", target_ip)
+            ofproto = dp.ofproto
+            parser = dp.ofproto_parser
+            actions = [parser.OFPActionOutput(port=ofproto.OFPP_ALL)]
+            out = parser.OFPPacketOut(
+                datapath=dp,
+                buffer_id=ofproto.OFP_NO_BUFFER,
+                in_port=ofproto.OFPP_CONTROLLER,
+                actions=actions,
+                data=p.data,
+            )
+            dp.send_msg(out)
+        _logger.info("[DHCP] ARP PROBE sent for IP %s from %d switches", target_ip, len(sends))
 
     @classmethod
     def _arp_probe(cls, ip_str, datapath):
@@ -205,6 +217,23 @@ class DHCPServer:
             if opt.tag == _DHCP_REQ_IP_OPT:
                 try:
                     return socket.inet_ntoa(opt.value)
+                except Exception:
+                    return None
+        return None
+
+    @classmethod
+    def _get_hostname(cls, pkt):
+        """Extract the client hostname from DHCP Option 12."""
+        dhcp_data = pkt.get_protocol(dhcp.dhcp)
+        if dhcp_data is None or dhcp_data.options is None or dhcp_data.options.option_list is None:
+            return None
+        for opt in dhcp_data.options.option_list:
+            if opt.tag == _DHCP_HOST_NAME_OPT:
+                try:
+                    val = opt.value
+                    if isinstance(val, bytes):
+                        return val.decode('utf-8', errors='replace').rstrip('\x00')
+                    return str(val)
                 except Exception:
                     return None
         return None
@@ -337,6 +366,9 @@ class DHCPServer:
                 'state': LEASE_ALLOCATED,
             }
             cls.ip_to_mac[assigned_ip] = mac_bytes
+            hostname = cls.mac_to_hostname.get(mac_bytes)
+            if hostname:
+                DNSServer.add_record(hostname, assigned_ip)
             _logger.info("[DHCP] ACK IP %s -> MAC %s (state ALLOCATED, expires in %ds)",
                          assigned_ip, client_mac, cls.lease_time)
         elif lease is not None and lease['state'] == LEASE_ALLOCATED:
@@ -346,6 +378,9 @@ class DHCPServer:
                                         "requested IP %s does not match lease %s" %
                                         (requested_ip, assigned_ip))
             cls.mac_to_lease[mac_bytes]['expires_at'] = now + cls.lease_time
+            hostname = cls.mac_to_hostname.get(mac_bytes)
+            if hostname:
+                DNSServer.add_record(hostname, assigned_ip)
             _logger.info("[DHCP] RENEW IP %s -> MAC %s (expires in %ds)",
                          assigned_ip, client_mac, cls.lease_time)
         else:
@@ -360,6 +395,9 @@ class DHCPServer:
                 'state': LEASE_ALLOCATED,
             }
             cls.ip_to_mac[assigned_ip] = mac_bytes
+            hostname = cls.mac_to_hostname.get(mac_bytes)
+            if hostname:
+                DNSServer.add_record(hostname, assigned_ip)
             _logger.info("[DHCP] ACK IP %s -> MAC %s (new allocation, expires in %ds)",
                          assigned_ip, client_mac, cls.lease_time)
 
@@ -428,6 +466,13 @@ class DHCPServer:
         if msg_type is None:
             return
 
+        eth = pkt.get_protocol(ethernet.ethernet)
+        mac_bytes = addrconv.mac.text_to_bin(eth.src) if eth else None
+
+        hostname = cls._get_hostname(pkt)
+        if hostname and mac_bytes:
+            cls.mac_to_hostname[mac_bytes] = hostname
+
         # ---- DHCPDISCOVER ----
         if msg_type == bytes([dhcp.DHCP_DISCOVER]):
             resp_pkt = cls.assemble_offer(pkt, datapath)
@@ -442,15 +487,11 @@ class DHCPServer:
 
         # ---- DHCPRELEASE ----
         elif msg_type == bytes([dhcp.DHCP_RELEASE]):
-            eth = pkt.get_protocol(ethernet.ethernet)
-            mac_bytes = addrconv.mac.text_to_bin(eth.src) if eth else None
             if mac_bytes:
                 cls._release_lease(mac_bytes)
 
         # ---- DHCPDECLINE ----
         elif msg_type == bytes([_DHCP_DECLINE]):
-            eth = pkt.get_protocol(ethernet.ethernet)
-            mac_bytes = addrconv.mac.text_to_bin(eth.src) if eth else None
             if mac_bytes:
                 lease = cls.mac_to_lease.get(mac_bytes)
                 if lease:

@@ -18,9 +18,8 @@ def send_arp(node, count=1):
     node.cmd('arping -c %d -A -I %s-eth0 %s' % (count, node.name, node.IP()))
 
 def send_dhcp(node):
-    print('Sending DHCP request dhclient -v %s-eth0 '% (node.name))
+    print('Sending DHCP request dhclient -v %s-eth0' % (node.name))
     node.cmd('dhclient -v %s-eth0' % (node.name))
-    # Wait for dhclient to complete, then update Mininet's IP tracking
     import time
     time.sleep(2)
     out = node.cmd('ip addr show %s-eth0 | grep "inet " | awk \'{print $2}\' | cut -d/ -f1' % node.name).strip()
