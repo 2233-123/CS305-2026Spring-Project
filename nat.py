@@ -399,13 +399,16 @@ class NATTable:
             return None, None
 
         rewritten = cls._rewrite_inbound(raw_data, info, entry)
-        # Debug: verify the rewritten packet checksums
-        new_info = _parse_eth_ip(rewritten)
-        if new_info:
-            ip_hdr = rewritten[14:14 + new_info['ip_ihl']]
-            ip_csum = _checksum(ip_hdr)
-            tcp_ok = 'OK' if ip_csum == 0 else 'BAD(%s)' % ip_csum
-            _logger.info("[NAT-IN-DBG] IP csum=%s proto=%s", tcp_ok, proto)
+        if proto == PROTO_TCP:
+            import sys
+            new_info = _parse_eth_ip(rewritten)
+            if new_info:
+                ih = rewritten[14:14+new_info['ip_ihl']]
+                ip_ok = _checksum(ih) == 0
+                l4 = 14 + new_info['ip_ihl']
+                th = rewritten[l4:l4+((rewritten[l4+12]>>4)&0x0F)*4]
+                tcp_ok = "?".rjust(len(str(proto)))
+                print("[NAT-DBG] inbound TCP IP_csum=%s" % ("OK" if ip_ok else "BAD"), file=sys.stderr, flush=True)
         return rewritten, entry
 
     # ------------------------------------------------------------------
