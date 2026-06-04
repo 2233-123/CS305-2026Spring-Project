@@ -345,8 +345,20 @@ class ControllerApp(app_manager.OSKenApp):
         for host_mac, info in list(self.hosts.items()):
             host_dpid = info['dpid']
             host_port = info['port']
+            host_ip = info.get('ip', '')
+            # Skip direct flows for external hosts — NAT must intercept
+            # packets to external destinations via the table-miss path.
+            host_is_external = (host_ip and
+                not _ip_in_network(host_ip,
+                                   NATConfig.internal_network.split('/')[0],
+                                   NATConfig.internal_prefix) and
+                host_ip != NATConfig.external_ip)
             for sw_dpid in self.switches:
                 if host_mac not in self.hosts:
+                    continue
+                if host_is_external:
+                    self.logger.info("[Flow] Skipping direct flows for external host %s (ip=%s)",
+                                     host_mac[-6:], host_ip)
                     continue
                 if sw_dpid == host_dpid:
                     ofctl = self.ofctls.get(sw_dpid)
