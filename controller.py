@@ -729,6 +729,7 @@ class ControllerApp(app_manager.OSKenApp):
             # ---- NAT ----
             if pkt_ipv4:
                 dst_ip = pkt_ipv4.dst
+                dhcp_net, dhcp_pfx = self._dhcp_network()
                 if dst_ip == NATConfig.external_ip:
                     # Inbound: external host sends to NAT IP
                     result = NATTable.handle_inbound(datapath, inPort, msg.data)
@@ -741,8 +742,7 @@ class ControllerApp(app_manager.OSKenApp):
                         NATTable._send_packet(datapath, inPort, rewritten, out_port)
                     return
                 elif (dst_ip != DNSConfig.controller_ip and
-                      not _ip_in_network(dst_ip, NATConfig.internal_network.split('/')[0],
-                                         NATConfig.internal_prefix)):
+                      not _ip_in_network(dst_ip, dhcp_net, dhcp_pfx)):
                     # Outbound: internal host sends to external IP
                     out_port = self._get_host_port(inPort, dst_ip)
                     if out_port is None:
