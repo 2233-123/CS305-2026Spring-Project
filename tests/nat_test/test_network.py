@@ -116,10 +116,12 @@ def run_tests():
     # Add default route via NAT gateway so TCP connect() can reach external IPs
     h1.cmd('ip route add default via 192.168.1.1 2>/dev/null || true')
     h3.cmd('ip route add default via 192.168.1.1 2>/dev/null || true')
-    # Disable reverse-path filtering so hosts accept packets from external IPs
-    for node in [h1, h3]:
-        node.cmd('sysctl -w net.ipv4.conf.all.rp_filter=0')
-        node.cmd('sysctl -w net.ipv4.conf.%s-eth0.rp_filter=0' % node.name)
+    # Disable reverse-path filtering + TCP offloading so hosts accept external packets
+    for node in [h1, h2, h3]:
+        for iface in ['all', 'default', node.name + '-eth0']:
+            node.cmd('sysctl -w net.ipv4.conf.%s.rp_filter=0 2>/dev/null' % iface)
+        node.cmd('ethtool -K %s-eth0 tx off rx off 2>/dev/null || true' % node.name)
+        node.cmd('iptables -I INPUT -i %s-eth0 -j ACCEPT 2>/dev/null || true' % node.name)
 
     # --- External host: static IP ---
     print("\n=== External network: static IP ===")
