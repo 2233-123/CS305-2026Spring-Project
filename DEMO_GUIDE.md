@@ -699,18 +699,13 @@ sudo env "PATH=$PATH" python tests/dns_test/test_network.py
 脚本自动完成 DHCP 分配和 ARP 注册后进入 Mininet CLI，手动执行以下查询：
 
 ```
-> h1 python3 -c "import socket; print(socket.gethostbyname('h2'))"
-    → A 记录：返回 h2 的 IP
-
-> h2 python3 -c "import socket; print(socket.gethostbyname('h1'))"
-    → A 记录：返回 h1 的 IP
-
-> h1 python3 -c "import socket; print(socket.gethostbyaddr('192.168.1.3'))"
-    → PTR 反向：返回 ('h2', [], ['192.168.1.3'])
-
-> h1 python3 -c "import socket; socket.gethostbyname('unknown.host')"
-    → NXDOMAIN: socket.gaierror
+> h1 nslookup h2 192.168.1.1        ← A 记录：返回 h2 的 IP
+> h2 nslookup h1 192.168.1.1        ← A 记录：返回 h1 的 IP
+> h1 nslookup 3.1.168.192.in-addr.arpa 192.168.1.1  ← PTR：返回 h2
+> h1 nslookup unknown.host 192.168.1.1  ← NXDOMAIN
 ```
+
+> 如果 `nslookup` 未安装：`sudo apt-get install -y dnsutils`
 
 **控制器终端同步展示：**
 ```
