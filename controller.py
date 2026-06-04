@@ -729,6 +729,7 @@ class ControllerApp(app_manager.OSKenApp):
                         link_key = (min(local_dpid, src_dpid), max(local_dpid, src_dpid))
 
                         updated = False
+                        port_changed = False
                         for l in self.links:
                             a, b = min(l['src_dpid'], l['dst_dpid']), max(l['src_dpid'], l['dst_dpid'])
                             if a == link_key[0] and b == link_key[1]:
@@ -743,6 +744,7 @@ class ControllerApp(app_manager.OSKenApp):
                                 if old_src != l['src_port'] or old_dst != l['dst_port']:
                                     self.logger.info("[Probe] Updated link s%s<->s%s ports: %d<->%d",
                                                      link_key[0], link_key[1], l['src_port'], l['dst_port'])
+                                    port_changed = True
                                 updated = True
                                 break
 
@@ -759,7 +761,8 @@ class ControllerApp(app_manager.OSKenApp):
                             self._install_host_flows()
                         else:
                             self._update_topology()
-                            self._install_host_flows()
+                            if port_changed:
+                                self._install_host_flows()
                     return
 
             pkt_arp = pkt.get_protocol(arp.arp)
