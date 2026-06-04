@@ -354,17 +354,25 @@ class ControllerApp(app_manager.OSKenApp):
     def _install_host_flows(self):
         self._print_topology()
         dhcp_net, dhcp_prefix = self._dhcp_network()
+        # Only apply the external-host skip when at least one host actually
+        # lives in the DHCP network.  Otherwise (e.g. switching test where
+        # Mininet auto-assigns 10.0.0.x but DHCP defaults to 192.168.1.x)
+        # every host would be misidentified as external.
+        any_in_dhcp = any(
+            _ip_in_network(info.get('ip', ''), dhcp_net, dhcp_prefix)
+            for info in self.hosts.values()
+        ) if self.hosts else False
         for host_mac, info in list(self.hosts.items()):
             host_dpid = info['dpid']
             host_port = info['port']
             host_ip = info.get('ip', '')
             # Skip direct flows for external hosts — NAT must intercept
             # packets to external destinations via the table-miss path.
-            # "External" means: not in the DHCP-configured internal network
-            # and not the NAT external IP itself.
-            host_is_external = (host_ip and
+            host_is_external = (
+                any_in_dhcp and host_ip and
                 not _ip_in_network(host_ip, dhcp_net, dhcp_prefix) and
-                host_ip != NATConfig.external_ip)
+                host_ip != NATConfig.external_ip
+            )
             for sw_dpid in self.switches:
                 if host_mac not in self.hosts:
                     continue
