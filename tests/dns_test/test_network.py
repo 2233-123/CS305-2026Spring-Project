@@ -90,6 +90,10 @@ def run_tests():
     do_arp_all(net)
     time.sleep(1)
 
+    # Configure Mininet hosts to use controller as DNS server
+    for h in net.hosts:
+        h.cmd("echo 'nameserver 192.168.1.1' > /etc/resolv.conf")
+
     dns_ip = DNSConfig.controller_ip
 
     print()
@@ -100,22 +104,22 @@ def run_tests():
     print()
     print("  === A record (forward lookup) ===")
     print("  Query h1 for hostname 'h2':")
-    print("    > h1 nslookup h2 %s" % dns_ip)
-    print("    Expected: answer = %s" % ip2)
+    print("    > h1 python3 -c \"import socket; print(socket.gethostbyname('h2'))\"")
+    print("    Expected: %s" % ip2)
     print()
     print("  Query h2 for hostname 'h1':")
-    print("    > h2 nslookup h1 %s" % dns_ip)
-    print("    Expected: answer = %s" % ip1)
+    print("    > h2 python3 -c \"import socket; print(socket.gethostbyname('h1'))\"")
+    print("    Expected: %s" % ip1)
     print()
     print("  === PTR record (reverse lookup) ===")
     print("  Reverse-lookup %s:" % ip2)
-    print("    > h1 nslookup %s %s" % ('.'.join(reversed(ip2.split('.'))) + '.in-addr.arpa', dns_ip) if ip2 else "")
-    print("    Expected: name = h2")
+    print("    > h1 python3 -c \"import socket; print(socket.gethostbyaddr('%s'))\"" % ip2)
+    print("    Expected: ('h2', [], ['%s'])" % ip2)
     print()
     print("  === NXDOMAIN ===")
     print("  Query non-existent hostname:")
-    print("    > h1 nslookup unknown.host %s" % dns_ip)
-    print("    Expected: ** server can't find unknown.host: NXDOMAIN")
+    print("    > h1 python3 -c \"import socket; socket.gethostbyname('unknown.host')\"")
+    print("    Expected: socket.gaierror (Name or service not known)")
     print()
     print("  Check controller terminal for:")
     print("    [DNS] Registered h1 <-> 192.168.1.2")
