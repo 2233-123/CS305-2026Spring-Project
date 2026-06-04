@@ -260,9 +260,11 @@ class ControllerApp(app_manager.OSKenApp):
             for dpid in self.switches:
                 G.add_node(dpid, label=f's{dpid}', node_type='switch')
             for link in self.links:
+                w = self._edge_weight(link['src_dpid'], link['dst_dpid'])
                 G.add_edge(link['src_dpid'], link['dst_dpid'],
                            src_port=link.get('src_port', '?'),
-                           dst_port=link.get('dst_port', '?'))
+                           dst_port=link.get('dst_port', '?'),
+                           weight=w)
             for mac, info in self.hosts.items():
                 host_label = info.get('ip', mac)
                 host_dpid = info['dpid']
@@ -280,12 +282,14 @@ class ControllerApp(app_manager.OSKenApp):
                     try:
                         path = nx.shortest_path(G, source=s_a, target=s_b,
                                                 weight='weight')
+                        cost = nx.shortest_path_length(G, source=s_a, target=s_b,
+                                                       weight='weight')
                         length = len(path) - 1
                         if length > 0:
-                            self.logger.info("[NetworkX]   s%s -> s%s : %s, %d edges (nx)",
+                            self.logger.info("[NetworkX]   s%s -> s%s : %s, %d edges (cost=%s, nx)",
                                              s_a, s_b,
                                              ' -> '.join(f's{p}' for p in path),
-                                             length)
+                                             length, cost)
                     except (nx.NetworkXNoPath, nx.NodeNotFound):
                         self.logger.info("[NetworkX]   s%s -> s%s : NO PATH (nx)", s_a, s_b)
         except Exception as e:
