@@ -399,22 +399,6 @@ class NATTable:
             return None, None
 
         rewritten = cls._rewrite_inbound(raw_data, info, entry)
-        if proto == PROTO_TCP:
-            import sys
-            new_info = _parse_eth_ip(rewritten)
-            if new_info:
-                ih = rewritten[14:14+new_info['ip_ihl']]
-                ip_ok = _checksum(ih) == 0
-                l4 = 14 + new_info['ip_ihl']
-                tcp_hdr_len = ((rewritten[l4+12]>>4)&0x0F)*4
-                # Compute full TCP checksum with pseudo-header
-                tcp_seg = rewritten[l4:l4+tcp_hdr_len]
-                pseudo = (rewritten[26:30] + rewritten[30:34] +
-                          bytes([0, 6]) +
-                          struct.pack('!H', len(rewritten) - l4))
-                full_csum = _checksum(pseudo + tcp_seg[:16] + b'\x00\x00' + tcp_seg[18:])
-                tcp_ok = "OK" if full_csum == 0 else "BAD(0x%04x)" % full_csum
-                print("[NAT-DBG] TCP IP=%s TCP=%s" % ("OK" if ip_ok else "BAD", tcp_ok), file=sys.stderr, flush=True)
         return rewritten, entry
 
     # ------------------------------------------------------------------

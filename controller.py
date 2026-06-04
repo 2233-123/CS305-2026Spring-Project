@@ -720,8 +720,6 @@ class ControllerApp(app_manager.OSKenApp):
                 dst_ip = pkt_ipv4.dst
                 if dst_ip == NATConfig.external_ip:
                     # Inbound: external host sends to NAT IP
-                    import sys
-                    print("[NAT-IN-CTRL] inbound pkt dst=%s proto=%s" % (dst_ip, msg.data[23]), file=sys.stderr, flush=True)
                     result = NATTable.handle_inbound(datapath, inPort, msg.data)
                     if result[0] is not None:
                         rewritten, entry = result
@@ -729,10 +727,8 @@ class ControllerApp(app_manager.OSKenApp):
                         out_port = self._get_host_port(inPort, internal_ip)
                         if out_port is None:
                             out_port = datapath.ofproto.OFPP_ALL
-                        print("[NAT-IN-CTRL] forwarding to %s port=%s" % (internal_ip, out_port), file=sys.stderr, flush=True)
                         NATTable._send_packet(datapath, inPort, rewritten, out_port)
-                    else:
-                        print("[NAT-IN-CTRL] NO ENTRY for dst=%s" % dst_ip, file=sys.stderr, flush=True)
+                    return
                 elif (dst_ip != DNSConfig.controller_ip and
                       not _ip_in_network(dst_ip, NATConfig.internal_network.split('/')[0],
                                          NATConfig.internal_prefix)):
