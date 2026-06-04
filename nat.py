@@ -115,8 +115,9 @@ class NATTable:
             return (src_ip, src_port, dst_ip, dst_port, proto)
 
     @classmethod
-    def _create_entry(cls, src_ip, src_port, dst_ip, dst_port, proto, nat_ip, src_mac=b''):
-        nat_port = cls._alloc_port()
+    def _create_entry(cls, src_ip, src_port, dst_ip, dst_port, proto, nat_ip, src_mac=b'', nat_port=None):
+        if nat_port is None:
+            nat_port = cls._alloc_port()
         now = time.time()
         key = cls._conn_key(src_ip, src_port, dst_ip, dst_port, proto)
         entry = {
@@ -359,8 +360,11 @@ class NATTable:
 
         entry = cls._lookup_outbound(src_ip, src_port, dst_ip, dst_port, proto)
         if entry is None:
+            # For ICMP, use the ICMP identifier as nat_port so inbound lookup works
+            nat_port = src_port if proto == PROTO_ICMP else None
             entry = cls._create_entry(src_ip, src_port, dst_ip, dst_port, proto,
-                                      NATConfig.external_ip, info['src_mac'])
+                                      NATConfig.external_ip, info['src_mac'],
+                                      nat_port=nat_port)
 
         rewritten = cls._rewrite_outbound(raw_data, info, entry, dst_mac)
         cls._send_packet(datapath, in_port, rewritten, output_port)

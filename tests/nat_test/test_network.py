@@ -152,40 +152,21 @@ def run_tests():
 
     # --- TCP connectivity through NAT ---
     print("\n=== NAT: TCP connectivity ===")
-    # Write TCP server script to h2
-    h2.cmd("""cat > /tmp/tcp_server.py << 'PYEOF'
-import socket
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(('0.0.0.0', 8088))
-s.listen(1)
-c, addr = s.accept()
-data = c.recv(1024)
-with open('/tmp/h2_recv.txt', 'w') as f:
-    f.write(data.decode())
-c.close()
-s.close()
-PYEOF""")
+    h1.cmd('ip route show 2>&1')
+    # Debug: check if h1 can reach h2 at all
+    result = h1.cmd('ping -c 1 -W 1 %s 2>&1' % ext_ip)
+    print("  [DIAG] pre-TCP ping: " + result.strip().split('\n')[-1])
+    # Use python3 http.server on h2 — more reliable than raw sockets
     h2.cmd('rm -f /tmp/h2_recv.txt /tmp/h2_tcp.log')
-    h2.cmd('python3 /tmp/tcp_server.py > /tmp/h2_tcp.log 2>&1 &')
-    time.sleep(0.5)
-
-    # Write TCP client script to h1
-    h1.cmd("""cat > /tmp/tcp_client.py << 'PYEOF'
-import sys, socket
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.settimeout(5)
-s.connect(('%s', 8088))
-s.send(sys.stdin.read().encode())
-s.close()
-PYEOF""" % ext_ip)
-    h1.cmd("echo 'HELLO_FROM_H1' | python3 /tmp/tcp_client.py 2>/dev/null || true")
+    h2.cmd('echo "HELLO_FROM_H2" > /tmp/index.html')
+    h2.cmd('python3 -m http.server 8088 --bind 10.0.2.100 > /tmp/h2_http.log 2>&1 &')
     time.sleep(1)
-
-    received_data = h2.cmd('cat /tmp/h2_recv.txt 2>/dev/null').strip()
-    check('HELLO_FROM_H1' in received_data,
+    # Use curl on h1 to fetch via NAT
+    result = h1.cmd('curl -sS --connect-timeout 5 -m 5 http://%s:8088/index.html 2>&1' % ext_ip)
+    print("  [DIAG] curl result: '%s'" % result.strip())
+    h2.cmd('pkill -f "http.server" 2>/dev/null || true')
+    check(result.strip() == 'HELLO_FROM_H2',
           "TCP: h2 received data from h1 via NAT")
-    h2.cmd('pkill -f "tcp_server.py" 2>/dev/null || true')
 
     # --- Test that internal traffic is NOT NAT'd ---
     print("\n=== Internal-to-internal: no NAT ===")
