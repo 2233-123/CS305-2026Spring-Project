@@ -727,8 +727,12 @@ class ControllerApp(app_manager.OSKenApp):
                         out_port = self._get_host_port(inPort, internal_ip)
                         if out_port is None:
                             out_port = datapath.ofproto.OFPP_ALL
+                        self.logger.info("[NAT-IN] Forwarding to %s port=%s proto=%s",
+                                         internal_ip, out_port,
+                                         entry.get('proto', '?'))
                         NATTable._send_packet(datapath, inPort, rewritten, out_port)
-                    return
+                    else:
+                        self.logger.info("[NAT-IN] No entry found for inbound packet")
                 elif (dst_ip != DNSConfig.controller_ip and
                       not _ip_in_network(dst_ip, NATConfig.internal_network.split('/')[0],
                                          NATConfig.internal_prefix)):
