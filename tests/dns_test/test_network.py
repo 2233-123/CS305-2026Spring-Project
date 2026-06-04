@@ -78,6 +78,10 @@ def run_tests():
 
     h1, h2 = net.get('h1', 'h2')
 
+    # Set unique hostnames so DNS registers h1 → IP1, h2 → IP2 correctly
+    h1.cmd('hostname h1')
+    h2.cmd('hostname h2')
+
     print("\n=== Step 1: DHCP allocation ===")
     print("Controller log should show: [DNS] Registered h1 <-> 192.168.1.2")
     ip1 = send_dhcp(h1)
