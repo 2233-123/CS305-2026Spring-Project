@@ -28,6 +28,9 @@ _DHCP_HOST_NAME_OPT  = getattr(dhcp, 'DHCP_HOST_NAME_OPT', 12)            # RFC 
 class DHCPConfig:
     controller_macAddr = '7e:49:b3:f0:f9:99'
     dns = '8.8.8.8'
+    start_ip = '192.168.1.2'
+    end_ip = '192.168.1.100'
+    netmask = '255.255.255.0'
     lease_time = 60          # seconds — shorten for testing; change to 86400 for production
     reaper_interval = 30      # seconds between lease expiry scans
     probe_timeout = 2         # seconds to wait for ARP probe response
