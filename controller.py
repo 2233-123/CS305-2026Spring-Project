@@ -742,7 +742,11 @@ class ControllerApp(app_manager.OSKenApp):
                     out_port = self._get_host_port(inPort, dst_ip)
                     if out_port is None:
                         out_port = datapath.ofproto.OFPP_ALL
-                    NATTable.handle_outbound(datapath, inPort, msg.data, out_port)
+                    dst_mac_bytes = self.ip_to_mac.get(dst_ip)
+                    if dst_mac_bytes:
+                        dst_mac_bytes = addrconv.mac.text_to_bin(dst_mac_bytes)
+                    NATTable.handle_outbound(datapath, inPort, msg.data, out_port,
+                                             dst_mac=dst_mac_bytes)
                     return
 
             if len(msg.data) >= 14:

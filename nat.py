@@ -175,8 +175,9 @@ class NATTable:
     # packet rewriting
     # ------------------------------------------------------------------
     @classmethod
-    def _rewrite_outbound(cls, raw, info, entry):
-        """Rewrite src IP -> nat_ip, src port -> nat_port, src mac -> controller mac."""
+    def _rewrite_outbound(cls, raw, info, entry, dst_mac=None):
+        """Rewrite src IP -> nat_ip, src port -> nat_port, src mac -> controller mac,
+        and optionally dst mac -> external host's real mac."""
         data = bytearray(raw)
         ip_offset = 14
         l4_offset = ip_offset + info['ip_ihl']
@@ -185,6 +186,10 @@ class NATTable:
         from os_ken.lib import addrconv
         ctrl_mac = addrconv.mac.text_to_bin(NATConfig.controller_mac)
         data[6:12] = ctrl_mac
+
+        # Ethernet dst -> external host's real mac (in case internal host used gateway MAC)
+        if dst_mac:
+            data[0:6] = dst_mac
 
         # IP src -> nat_ip
         nat_ip_b = socket.inet_aton(entry['nat_ip'])
@@ -325,7 +330,7 @@ class NATTable:
     # main handlers — called from controller
     # ------------------------------------------------------------------
     @classmethod
-    def handle_outbound(cls, datapath, in_port, raw_data, output_port):
+    def handle_outbound(cls, datapath, in_port, raw_data, output_port, dst_mac=None):
         """Process an outbound packet (internal -> external)."""
         info = _parse_eth_ip(raw_data)
         if info is None:
@@ -357,7 +362,7 @@ class NATTable:
             entry = cls._create_entry(src_ip, src_port, dst_ip, dst_port, proto,
                                       NATConfig.external_ip, info['src_mac'])
 
-        rewritten = cls._rewrite_outbound(raw_data, info, entry)
+        rewritten = cls._rewrite_outbound(raw_data, info, entry, dst_mac)
         cls._send_packet(datapath, in_port, rewritten, output_port)
 
         if proto in (PROTO_TCP, PROTO_UDP):
