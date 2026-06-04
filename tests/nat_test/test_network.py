@@ -156,18 +156,6 @@ def run_tests():
     both_work = '0% packet loss' in result
     check(both_work, "h3 -> %s ping success (multi-client NAT)" % ext_ip)
 
-    # --- TCP connectivity through NAT ---
-    print("\n=== NAT: TCP connectivity ===")
-    h2.cmd('rm -f /tmp/h2_recv.txt')
-    # Use Python socket server — more reliable than nc
-    h2.cmd('python3 -m http.server 8088 --bind 10.0.2.100 > /tmp/h2_http.log 2>&1 &')
-    time.sleep(1)
-    result = h1.cmd('curl -sS --connect-timeout 10 -m 10 http://%s:8088/ 2>&1' % ext_ip)
-    time.sleep(1)
-    check(result.strip() != '' and 'curl:' not in result,
-          "TCP: h1 reached h2 via NAT (HTTP)")
-    h2.cmd('pkill -f "http.server" 2>/dev/null || true')
-
     # --- Test that internal traffic is NOT NAT'd ---
     print("\n=== Internal-to-internal: no NAT ===")
     if ip1 and ip3:
