@@ -122,7 +122,7 @@ def _parse_dns_response(data):
     return ('FAIL', '')
 
 
-def dns_query_from_host(host_cmd, domain, dns_ip, qtype=1):
+def dns_query_from_host(host, domain, dns_ip, qtype=1):
     """Send DNS query from within a Mininet host via node.cmd.
     
     We use a Python inline approach via the cmd() method which runs
@@ -130,7 +130,7 @@ def dns_query_from_host(host_cmd, domain, dns_ip, qtype=1):
     """
     query = _build_dns_query(domain, qtype)
     query_hex = query.hex()
-    resp_hex = host_cmd(
+    resp_hex = host.cmd(
         "python3 -c \""
         "import socket, sys, binascii;"
         "s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM);"
