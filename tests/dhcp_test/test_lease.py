@@ -129,16 +129,21 @@ def run_tests():
     time.sleep(1)
 
     # ---------------------------------------------------------------
-    # Test 3: IP pool exhaustion (requires narrow range: 2 IPs)
-    #     If the pool has only 2 IPs, h3 should fail when h1,h2 are active.
-    #     NOTE: To test this, change end_ip in dhcp.py to '192.168.1.3'
-    #     and ensure h1,h2 have active leases.
+    # Test 3: IP pool exhaustion — manual CLI interaction
     # ---------------------------------------------------------------
-    print("\n=== Test 3: IP pool exhaustion (verify via controller logs) ===")
-    print("  * Manual check: ensure end_ip='192.168.1.3' in dhcp.py")
-    print("  * Release h1: dhclient -r h1-eth0")
-    print("  * Run: h3 dhclient -v h3-eth0  (should get h1's released IP)")
-    print("  * Verify in controller logs: '[DHCP] No free IP for MAC ...' when all leased")
+    print("\n=== Test 3: IP pool exhaustion ===")
+    print("  NOTE: change end_ip to '192.168.1.3' in dhcp.py and restart controller first")
+    print()
+    print("  Manual operations in Mininet CLI:")
+    print("  > h1 dhclient -r h1-eth0           # Release h1's IP")
+    print("  > h3 dhclient -v h3-eth0           # h3 should get h1's released IP")
+    print("  > h1 dhclient -v h1-eth0           # h1 re-requests (pool should be full)")
+    print("  > h1 ifconfig; h3 ifconfig         # Verify IPs")
+    print("  Controller log: '[DHCP] No free IP for MAC ...' when pool exhausted")
+    print("  Enter 'exit' or Ctrl+D to continue auto tests...")
+    print()
+    CLI(net)
+    do_arp_all(net)
 
     # ---------------------------------------------------------------
     # Test 4: Lease expiry (wait 65s, then check reclaim)
