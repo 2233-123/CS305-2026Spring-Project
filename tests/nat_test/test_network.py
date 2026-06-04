@@ -152,18 +152,19 @@ def run_tests():
 
     # --- TCP connectivity through NAT ---
     print("\n=== NAT: TCP connectivity ===")
-    h1.cmd('ip route show 2>&1')
-    # Debug: check if h1 can reach h2 at all
-    result = h1.cmd('ping -c 1 -W 1 %s 2>&1' % ext_ip)
-    print("  [DIAG] pre-TCP ping: " + result.strip().split('\n')[-1])
-    # Use python3 http.server on h2 — more reliable than raw sockets
+    # Capture on h1 to see what arrives
+    h1.cmd('timeout 10 tcpdump -i h1-eth0 -c 10 -n > /tmp/h1_dump.txt 2>&1 &')
+    time.sleep(0.3)
+    # Use python3 http.server on h2
     h2.cmd('rm -f /tmp/h2_recv.txt /tmp/h2_tcp.log')
     h2.cmd('echo "HELLO_FROM_H2" > /tmp/index.html')
     h2.cmd('python3 -m http.server 8088 --bind 10.0.2.100 > /tmp/h2_http.log 2>&1 &')
     time.sleep(1)
-    # Use curl on h1 to fetch via NAT
     result = h1.cmd('curl -sS --connect-timeout 5 -m 5 http://%s:8088/index.html 2>&1' % ext_ip)
-    print("  [DIAG] curl result: '%s'" % result.strip())
+    print("  [DIAG] curl: '%s'" % result.strip())
+    time.sleep(1)
+    print("  [DIAG] h1 tcpdump:")
+    print("  " + h1.cmd('cat /tmp/h1_dump.txt 2>/dev/null').strip().replace('\n', '\n  '))
     h2.cmd('pkill -f "http.server" 2>/dev/null || true')
     check(result.strip() == 'HELLO_FROM_H2',
           "TCP: h2 received data from h1 via NAT")
