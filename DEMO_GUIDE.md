@@ -684,7 +684,7 @@ h2---s2====5====s1---h1
 python tests/dns_test/test_dns_unit.py
 ```
 
-### B4.3 集成测试
+### B4.3 集成测试（半自动演示）
 
 **终端 1：**
 ```bash
@@ -696,22 +696,26 @@ osken-manager --observe-links controller.py
 sudo env "PATH=$PATH" python tests/dns_test/test_network.py
 ```
 
-**预期结果：**
+脚本自动完成 DHCP 分配和 ARP 注册后进入 Mininet CLI，手动执行以下查询：
 
-| 测试 | 查询 | 预期 |
-|------|------|------|
-| A 记录 | h1 查询 `h2` | 返回 h2 的 DHCP IP |
-| A 记录 | h2 查询 `h1` | 返回 h1 的 DHCP IP |
-| PTR 记录 | h1 反向查询 h2 的 IP | 返回 `h2` |
-| PTR 记录 | h2 反向查询 h1 的 IP | 返回 `h1` |
-| NXDOMAIN | h1 查询 `unknown.host` | 返回 `NXDOMAIN` |
+```
+> h1 nslookup h2 192.168.1.1        ← A 记录：返回 h2 的 IP
+> h2 nslookup h1 192.168.1.1        ← A 记录：返回 h1 的 IP
+> h1 nslookup 3.1.168.192.in-addr.arpa 192.168.1.1  ← PTR：返回 h2
+> h1 nslookup unknown.host 192.168.1.1  ← NXDOMAIN
+```
+
+**控制器终端同步展示：**
+```
+[DNS] Registered h1 <-> 192.168.1.2
+[DNS] Registered h2 <-> 192.168.1.3
+```
 
 ### B4.4 演示要点
 
 - 展示 DHCP 完成后 DNS 自动注册：`[DNS] Registered h1 <-> 192.168.1.2`
-- 展示 DNS 查询返回正确 IP（非交互脚本自动完成）
-- 展示 NXDOMAIN 场景
-- 强调 DNS 与 DHCP 的集成：DHCPRELEASE 时自动清理 DNS
+- 在 Mininet CLI 中用 `nslookup` 手动验证 A / PTR / NXDOMAIN
+- 强调 DHCPRELEASE / 租约过期时自动清理 DNS 记录（可在 Bonus 1 中联动演示）
 
 ---
 
