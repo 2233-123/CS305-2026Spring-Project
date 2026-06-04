@@ -260,9 +260,11 @@ class ControllerApp(app_manager.OSKenApp):
             for dpid in self.switches:
                 G.add_node(dpid, label=f's{dpid}', node_type='switch')
             for link in self.links:
+                w = self._edge_weight(link['src_dpid'], link['dst_dpid'])
                 G.add_edge(link['src_dpid'], link['dst_dpid'],
                            src_port=link.get('src_port', '?'),
-                           dst_port=link.get('dst_port', '?'))
+                           dst_port=link.get('dst_port', '?'),
+                           weight=w)
             for mac, info in self.hosts.items():
                 host_label = info.get('ip', mac)
                 host_dpid = info['dpid']
@@ -280,12 +282,14 @@ class ControllerApp(app_manager.OSKenApp):
                     try:
                         path = nx.shortest_path(G, source=s_a, target=s_b,
                                                 weight='weight')
+                        cost = nx.shortest_path_length(G, source=s_a, target=s_b,
+                                                       weight='weight')
                         length = len(path) - 1
                         if length > 0:
-                            self.logger.info("[NetworkX]   s%s -> s%s : %s, %d edges (nx)",
+                            self.logger.info("[NetworkX]   s%s -> s%s : %s, %d edges (cost=%s, nx)",
                                              s_a, s_b,
                                              ' -> '.join(f's{p}' for p in path),
-                                             length)
+                                             length, cost)
                     except (nx.NetworkXNoPath, nx.NodeNotFound):
                         self.logger.info("[NetworkX]   s%s -> s%s : NO PATH (nx)", s_a, s_b)
         except Exception as e:
@@ -341,8 +345,20 @@ class ControllerApp(app_manager.OSKenApp):
         for host_mac, info in list(self.hosts.items()):
             host_dpid = info['dpid']
             host_port = info['port']
+            host_ip = info.get('ip', '')
+            # Skip direct flows for external hosts — NAT must intercept
+            # packets to external destinations via the table-miss path.
+            host_is_external = (host_ip and
+                not _ip_in_network(host_ip,
+                                   NATConfig.internal_network.split('/')[0],
+                                   NATConfig.internal_prefix) and
+                host_ip != NATConfig.external_ip)
             for sw_dpid in self.switches:
                 if host_mac not in self.hosts:
+                    continue
+                if host_is_external:
+                    self.logger.info("[Flow] Skipping direct flows for external host %s (ip=%s)",
+                                     host_mac[-6:], host_ip)
                     continue
                 if sw_dpid == host_dpid:
                     ofctl = self.ofctls.get(sw_dpid)
@@ -681,9 +697,17 @@ class ControllerApp(app_manager.OSKenApp):
         try:
             msg = ev.msg
             datapath = msg.datapath
-            pkt = packet.Packet(data=msg.data)
+            raw = msg.data
+            pkt = packet.Packet(data=raw)
             pkt_dhcp = pkt.get_protocols(dhcp.dhcp)
             inPort = msg.in_port
+            # Debug: log every non-LLDP packet-in
+            if len(raw) >= 14:
+                eth = struct.unpack('!6s6sH', raw[0:14])
+                eth_type = eth[2]
+                if eth_type not in (0x88cc, 0x9999, 0x0806):
+                    self.logger.info("[PKT-IN] eth_type=0x%04x in_port=%s len=%d dpid=%s",
+                                     eth_type, inPort, len(raw), datapath.id)
             if pkt_dhcp:
                 hub.spawn(DHCPServer.handle_dhcp, datapath, inPort, pkt)
                 return
@@ -701,6 +725,8 @@ class ControllerApp(app_manager.OSKenApp):
             # ---- NAT ----
             if pkt_ipv4:
                 dst_ip = pkt_ipv4.dst
+                self.logger.info("[DEBUG-NAT] pkt_in IPv4: dst=%s src=%s proto=%s in_port=%s dpid=%s",
+                                 dst_ip, pkt_ipv4.src, pkt_ipv4.proto, inPort, datapath.id)
                 if dst_ip == NATConfig.external_ip:
                     # Inbound: external host sends to NAT IP
                     target_mac = self.ip_to_mac.get(dst_ip)
@@ -716,7 +742,11 @@ class ControllerApp(app_manager.OSKenApp):
                     out_port = self._get_host_port(inPort, dst_ip)
                     if out_port is None:
                         out_port = datapath.ofproto.OFPP_ALL
-                    NATTable.handle_outbound(datapath, inPort, msg.data, out_port)
+                    dst_mac_bytes = self.ip_to_mac.get(dst_ip)
+                    if dst_mac_bytes:
+                        dst_mac_bytes = addrconv.mac.text_to_bin(dst_mac_bytes)
+                    NATTable.handle_outbound(datapath, inPort, msg.data, out_port,
+                                             dst_mac=dst_mac_bytes)
                     return
 
             if len(msg.data) >= 14:
