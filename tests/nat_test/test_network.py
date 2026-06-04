@@ -152,19 +152,40 @@ def run_tests():
 
     # --- TCP connectivity through NAT ---
     print("\n=== NAT: TCP connectivity ===")
-    # Start listener on h2
-    h2.cmd('rm -f /tmp/h2_recv.txt')
-    h2.cmd('nc -l 10.0.2.100 8088 > /tmp/h2_recv.txt 2>&1 &')
+    # Start listener on h2 (Python socket server)
+    h2.cmd('rm -f /tmp/h2_recv.txt /tmp/h2_tcp.log')
+    h2.cmd('python3 -c "'
+           'import socket;'
+           's=socket.socket(socket.AF_INET,socket.SOCK_STREAM);'
+           's.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);'
+           's.bind((\"0.0.0.0\",8088));'
+           's.listen(1);'
+           'c,a=s.accept();'
+           'd=c.recv(1024);'
+           'open(\"/tmp/h2_recv.txt\",\"w\").write(d.decode());'
+           'c.close();'
+           's.close()" > /tmp/h2_tcp.log 2>&1 &')
     time.sleep(0.5)
-    # Send from h1
-    h1.cmd('echo "HELLO_FROM_H1" | nc -w 5 %s 8088 2>/dev/null || true' % ext_ip)
-    time.sleep(2)
+    # Send from h1 (Python socket client)
+    result = h1.cmd('echo "HELLO_FROM_H1" | python3 -c "'
+                    'import sys,socket;'
+                    's=socket.socket(socket.AF_INET,socket.SOCK_STREAM);'
+                    's.settimeout(10);'
+                    's.connect((\"%s\",8088));'
+                    's.send(sys.stdin.read().encode());'
+                    's.close()" 2>&1; echo "PYEXIT=$?"' % ext_ip)
+    print("  [DIAG] client output: " + result.strip().replace('\n', ' | '))
+    time.sleep(1)
     # Check what h2 received
     received_data = h2.cmd('cat /tmp/h2_recv.txt 2>/dev/null').strip()
+    server_log = h2.cmd('cat /tmp/h2_tcp.log 2>/dev/null').strip()
+    print("  [DIAG] h2 received: '%s'" % received_data)
+    if server_log:
+        print("  [DIAG] server log: " + server_log.replace('\n', ' | '))
     check('HELLO_FROM_H1' in received_data,
           "TCP: h2 received data from h1 via NAT")
     # Kill listener
-    h2.cmd('pkill -f "nc -l" 2>/dev/null || true')
+    h2.cmd('pkill -f "python3 -c.*socket" 2>/dev/null || true')
 
     # --- Test that internal traffic is NOT NAT'd ---
     print("\n=== Internal-to-internal: no NAT ===")
