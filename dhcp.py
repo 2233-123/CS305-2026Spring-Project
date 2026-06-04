@@ -27,11 +27,11 @@ _DHCP_HOST_NAME_OPT  = getattr(dhcp, 'DHCP_HOST_NAME_OPT', 12)            # RFC 
 
 class DHCPConfig:
     controller_macAddr = '7e:49:b3:f0:f9:99'
-    dns = '8.8.8.8'
-    start_ip = '192.168.1.2'
-    end_ip = '192.168.1.100'
+    dns = '10.0.0.1'
+    start_ip = '10.0.0.10'
+    end_ip = '10.0.0.20'
     netmask = '255.255.255.0'
-    lease_time = 60          # seconds — shorten for testing; change to 86400 for production
+    lease_time = 60
     reaper_interval = 30      # seconds between lease expiry scans
     probe_timeout = 2         # seconds to wait for ARP probe response
     conflict_ttl = 300        # seconds before retrying a previously-conflicted IP
@@ -49,12 +49,12 @@ LEASE_CONFLICTED = 'CONFLICTED'
 
 class DHCPServer:
     hardware_addr = DHCPConfig.controller_macAddr
-    start_ip = DHCPConfig.start_ip
-    end_ip = DHCPConfig.end_ip
-    netmask = DHCPConfig.netmask
-    dns = DHCPConfig.dns
-    lease_time = DHCPConfig.lease_time
-    server_ip = '192.168.1.1'
+    start_ip = '10.0.0.10'
+    end_ip = '10.0.0.20'
+    netmask = '255.255.255.0'
+    dns = '10.0.0.1'
+    lease_time = 60
+    server_ip = '10.0.0.1'
 
     mac_to_lease = {}   # mac_bytes -> {"ip": str, "assigned_at": float, "expires_at": float, "state": str}
     ip_to_mac = {}      # ip_str -> mac_bytes

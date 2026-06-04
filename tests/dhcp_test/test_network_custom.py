@@ -90,11 +90,16 @@ def send_arp(node, count=1):
 
 def send_dhcp(node):
     node.cmd('rm -f /var/lib/dhcp/dhclient*.leases')
-    node.cmd('dhclient -v %s-eth0' % node.name)
-    time.sleep(2)
+    node.cmd('ip addr flush dev %s-eth0 2>/dev/null' % node.name)
+    node.cmd('dhclient -v %s-eth0 2>/tmp/dhclient_%s.log' % (node.name, node.name))
+    time.sleep(4)
     out = node.cmd('ip addr show %s-eth0 | grep "inet " | awk \'{print $2}\' | cut -d/ -f1' % node.name).strip()
     if out:
         node.setIP(out, prefixLen=24)
+    # Print DHCP server that responded
+    log_out = node.cmd('grep -i "DHCPOFFER\|DHCPACK\|offer\|ack" /tmp/dhclient_%s.log 2>/dev/null | head -5' % node.name)
+    if log_out.strip():
+        print('    dhclient log: %s' % log_out.strip()[:200])
     return out
 
 
@@ -170,6 +175,9 @@ if __name__ == '__main__':
     print()
     print("  MAKE SURE the controller is STARTED with the modified dhcp.py.")
     print("  If already running, RESTART the controller NOW (Ctrl+C and re-run):")
+    print("    pkill -9 -f osken-manager")
+    print("    find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null")
+    print("    find . -name '*.pyc' -delete")
     print("    osken-manager --observe-links controller.py")
     print("=" * 60)
     input(">>> Press ENTER when controller is ready... ")
